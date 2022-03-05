@@ -3,5 +3,18 @@ name = "dfmblas"
 version = "0.1.0"
 edition = "2021"
 
+[profile.release]
+debug = true
+opt-level = 3
+
 [dependencies]
+dfmblas-macro = { version = "0.1.0", path = "macro" }
 num-traits = "0.2.14"
+rand = { version = "0.8.5", optional = true }
+
+[features]
+default = ["random"]
+random = ["rand"]
+
+[workspace]
+members = ["macro"]

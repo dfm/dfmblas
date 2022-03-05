@@ -1,22 +1,29 @@
+use dfmblas_macro::{CwiseAdd, CwiseMul, CwiseNeg, CwiseSub};
+
 use crate::{Index, IntoMatrix, MatrixShape};
 use std::marker::PhantomData;
+
+// Traits to define binary and unary ops
 
 pub trait UnaryOp<T> {
     fn call(a: T) -> T;
 }
+
+pub trait BinaryOp<Scalar> {
+    fn call(a: Scalar, b: Scalar) -> Scalar;
+}
+
+// Specific unary and binary op implementations
 
 pub struct Neg<Scalar>(PhantomData<Scalar>);
 impl<Scalar> UnaryOp<Scalar> for Neg<Scalar>
 where
     Scalar: std::ops::Neg<Output = Scalar>,
 {
+    #[inline]
     fn call(a: Scalar) -> Scalar {
         -a
     }
-}
-
-pub trait BinaryOp<Scalar> {
-    fn call(a: Scalar, b: Scalar) -> Scalar;
 }
 
 pub struct Add<Scalar>(PhantomData<Scalar>);
@@ -24,6 +31,7 @@ impl<Scalar> BinaryOp<Scalar> for Add<Scalar>
 where
     Scalar: std::ops::Add<Output = Scalar>,
 {
+    #[inline]
     fn call(a: Scalar, b: Scalar) -> Scalar {
         a + b
     }
@@ -34,6 +42,7 @@ impl<Scalar> BinaryOp<Scalar> for Sub<Scalar>
 where
     Scalar: std::ops::Sub<Output = Scalar>,
 {
+    #[inline]
     fn call(a: Scalar, b: Scalar) -> Scalar {
         a - b
     }
@@ -44,17 +53,31 @@ impl<Scalar> BinaryOp<Scalar> for Mul<Scalar>
 where
     Scalar: std::ops::Mul<Output = Scalar>,
 {
+    #[inline]
     fn call(a: Scalar, b: Scalar) -> Scalar {
         a * b
     }
 }
 
+#[derive(Debug, Clone, CwiseAdd, CwiseSub, CwiseMul, CwiseNeg)]
 pub struct CwiseUnaryOp<F, A>
 where
     F: UnaryOp<<A as MatrixShape>::Scalar>,
     A: MatrixShape,
 {
     a: A,
+    op: PhantomData<F>,
+}
+
+#[derive(Debug, Clone, CwiseAdd, CwiseSub, CwiseMul, CwiseNeg)]
+pub struct CwiseBinaryOp<F, A, B>
+where
+    F: BinaryOp<<A as MatrixShape>::Scalar>,
+    A: MatrixShape,
+    B: MatrixShape<Scalar = <A as MatrixShape>::Scalar>,
+{
+    a: A,
+    b: B,
     op: PhantomData<F>,
 }
 
@@ -94,24 +117,15 @@ where
 {
     type Scalar = <A as MatrixShape>::Scalar;
 
+    #[inline]
     fn rows(&self) -> Index {
         self.a.rows()
     }
 
+    #[inline]
     fn cols(&self) -> Index {
         self.a.cols()
     }
-}
-
-pub struct CwiseBinaryOp<F, A, B>
-where
-    F: BinaryOp<<A as MatrixShape>::Scalar>,
-    A: MatrixShape,
-    B: MatrixShape<Scalar = <A as MatrixShape>::Scalar>,
-{
-    pub(crate) a: A,
-    pub(crate) b: B,
-    pub(crate) op: PhantomData<F>,
 }
 
 impl<F, A, B> CwiseBinaryOp<F, A, B>
@@ -145,6 +159,7 @@ where
 {
     type Scalar = <A as MatrixShape>::Scalar;
 
+    #[inline]
     fn rows(&self) -> Index {
         if self.a.rows() != self.b.rows() {
             panic!("Dimension mismatch");
@@ -152,6 +167,7 @@ where
         self.a.rows()
     }
 
+    #[inline]
     fn cols(&self) -> Index {
         if self.a.cols() != self.b.cols() {
             panic!("Dimension mismatch");
@@ -176,18 +192,15 @@ where
     }
 }
 
-impl<F, A, B> std::ops::Neg for CwiseBinaryOp<F, A, B>
-where
-    F: BinaryOp<<A as MatrixShape>::Scalar>,
-    A: MatrixShape,
-    B: MatrixShape<Scalar = <A as MatrixShape>::Scalar>,
-    <Self as MatrixShape>::Scalar: std::ops::Neg<Output = <Self as MatrixShape>::Scalar>,
-{
-    type Output = CwiseUnaryOp<Neg<<Self as MatrixShape>::Scalar>, Self>;
-    fn neg(self) -> <Self as std::ops::Neg>::Output {
-        CwiseUnaryOp {
-            a: self,
-            op: PhantomData,
-        }
-    }
-}
+// // Custom implementation of std::ops::Neg for Neg op -> it should just unwrap
+// // Doesn't work because of "conflicting implementations"
+// impl<A> std::ops::Neg for CwiseUnaryOp<Neg<<A as MatrixShape>::Scalar>, A>
+// where
+//     A: MatrixShape,
+//     <Self as MatrixShape>::Scalar: std::ops::Neg<Output = <Self as MatrixShape>::Scalar>,
+// {
+//     type Output = A;
+//     fn neg(self) -> <Self as std::ops::Neg>::Output {
+//         self.a
+//     }
+// }
